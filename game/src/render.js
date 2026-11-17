@@ -34,6 +34,7 @@ export function drawSlimeShape(ctx, stage, x, y, r, time, opts = {}) {
   const squash = opts.squash || 0;
   ctx.save();
   ctx.translate(x, y);
+  ctx.rotate(opts.angle || 0);
   ctx.scale(1 + squash * 0.22, 1 - squash * 0.22);
   ctx.translate(-x, -y);
 
@@ -422,7 +423,7 @@ export function drawScene(ctx, g) {
   }
 
   for (const s of world.slimes) {
-    drawSlimeShape(ctx, s.stage, s.x, s.y, s.r, time, { squash: s.squash, vx: s.vx, phase: s.id * 0.73 });
+    drawSlimeShape(ctx, s.stage, s.x, s.y, s.r, time, { squash: s.squash, vx: s.vx, phase: s.id * 0.73, angle: s.angle || 0 });
   }
   for (const p of world.particles) {
     ctx.globalAlpha = Math.max(0, 1 - p.life / p.maxLife);

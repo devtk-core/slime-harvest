@@ -34,6 +34,8 @@ export function spawnSlime(world, stage, x, y, vx = 0, vy = 0) {
     r: def.radius,
     age: 0,
     squash: 0,
+    angle: 0,
+    angVel: 0,
     dead: false,
   };
   world.slimes.push(slime);
@@ -74,13 +76,21 @@ function stepPhysics(world, h) {
     s.vy += GRAVITY * h;
     s.x += s.vx * h;
     s.y += s.vy * h;
+    s.angVel = Math.max(-14, Math.min(14, s.angVel));
+    s.angle += s.angVel * h;
     if (s.x - s.r < BOX.left) { s.x = BOX.left + s.r; s.vx = Math.abs(s.vx) * 0.35; }
     if (s.x + s.r > BOX.right) { s.x = BOX.right - s.r; s.vx = -Math.abs(s.vx) * 0.35; }
     if (s.y + s.r > BOX.floor) {
       s.y = BOX.floor - s.r;
       if (Math.abs(s.vy) > 90) { s.vy = -s.vy * 0.22; s.squash = Math.min(1, Math.abs(s.vy) / 900); }
       else s.vy = 0;
-      s.vx *= 0.9;
+      // Rolling: keep most of the sideways speed and spin to match it, so a
+      // slime trundles along the soil instead of stopping dead.
+      s.vx *= 0.995;
+      const rolling = s.vx / s.r;
+      s.angVel += (rolling - s.angVel) * 0.4;
+    } else {
+      s.angVel *= 0.999;
     }
     if (s.y - s.r < BOX.top) { s.y = BOX.top + s.r; s.vy = Math.abs(s.vy) * 0.3; }
   }
@@ -114,6 +124,11 @@ function stepPhysics(world, h) {
         a.vy -= impulse * ny * aShare * 2;
         b.vx += impulse * nx * bShare * 2;
         b.vy += impulse * ny * bShare * 2;
+        // A glancing blow sets them spinning a little. (Applied every
+        // substep while in contact, so this must stay tiny.)
+        const tangential = rvx * -ny + rvy * nx;
+        a.angVel -= (tangential * 0.02) / Math.max(12, a.r);
+        b.angVel -= (tangential * 0.02) / Math.max(12, b.r);
       }
     }
   }
@@ -225,6 +240,14 @@ export function stepWorld(world, dt) {
     s.age += dt;
     s.squash = Math.max(0, s.squash - dt * 5);
     s.vx *= 0.999;
+    if (s.angle === undefined) { s.angle = 0; s.angVel = 0; }
+    // Once a slime settles, it rights itself: faces end up readable again.
+    const speed = Math.hypot(s.vx, s.vy);
+    if (speed < 30 && Math.abs(s.angVel) < 0.8) {
+      const upright = Math.round(s.angle / (Math.PI * 2)) * Math.PI * 2;
+      s.angle += (upright - s.angle) * Math.min(1, dt * 7);
+      s.angVel *= 0.75;
+    }
   }
   resolveRules(world);
 
