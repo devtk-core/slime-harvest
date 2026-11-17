@@ -155,8 +155,15 @@ let viewOffY = 0;
 
 function resize() {
   const dpr = Math.min(2, window.devicePixelRatio || 1);
-  canvas.width = Math.round(window.innerWidth * dpr);
-  canvas.height = Math.round(window.innerHeight * dpr);
+  const w = Math.round(window.innerWidth * dpr);
+  const h = Math.round(window.innerHeight * dpr);
+  // Assigning canvas.width clears the bitmap even when nothing changed,
+  // and mobile browsers fire resize for toolbar show/hide — skip no-ops
+  // so a tap never blanks the frame.
+  if (w !== canvas.width || h !== canvas.height) {
+    canvas.width = w;
+    canvas.height = h;
+  }
   viewScale = Math.min(canvas.width / VIEW.width, canvas.height / VIEW.height);
   viewOffX = (canvas.width - VIEW.width * viewScale) / 2;
   viewOffY = (canvas.height - VIEW.height * viewScale) / 2;
