@@ -1,7 +1,7 @@
 // Everything the player sees. Slimes are drawn entirely in code — body,
 // face and a little stage decoration — so the game ships zero image files.
 
-import { BOX, STAGES, TARGET_SCORE, VIEW } from './config.js';
+import { BOX, STAGES, TARGET_SCORE, VIEW, WIN_HARVESTS } from './config.js';
 
 // Fixed star specks for the night-sky backdrop (precomputed: no flicker).
 const STARS = [];
@@ -308,11 +308,11 @@ function drawHud(ctx, g) {
   }
   ctx.fillStyle = 'rgba(255,255,255,0.55)';
   ctx.font = '600 11px system-ui, sans-serif';
-  ctx.fillText(`GOAL ${TARGET_SCORE} pts to win`, 36, 244);
+  ctx.fillText(`GOAL ${TARGET_SCORE} pts + ${WIN_HARVESTS} Bloom+ harvests`, 36, 244);
 
   ctx.fillStyle = 'rgba(255,255,255,0.55)';
   ctx.font = '700 12px system-ui, sans-serif';
-  ctx.fillText(`HARVESTS ${world.harvests}    MERGES ${world.merges}`, 36, 276);
+  ctx.fillText(`BIG HARVESTS ${world.bigHarvests}/${WIN_HARVESTS}    MERGES ${world.merges}`, 36, 276);
   if (world.combo > 1) {
     ctx.fillStyle = '#ff9ed2';
     ctx.font = '800 17px system-ui, sans-serif';
@@ -364,8 +364,8 @@ function drawGuide(ctx, g) {
   });
   ctx.fillStyle = 'rgba(255,255,255,0.6)';
   ctx.font = '600 11.5px system-ui, sans-serif';
-  ctx.fillText('Two Kings meeting', 782, 592);
-  ctx.fillText('is a ROYAL HARVEST.', 782, 608);
+  ctx.fillText('Kings never merge away.', 782, 592);
+  ctx.fillText('Only a triple reaps them.', 782, 608);
 }
 
 function drawButton(ctx, rect, label, primary) {
@@ -453,7 +453,7 @@ export function drawScene(ctx, g) {
     ctx.font = '600 17px system-ui, sans-serif';
     ctx.fillText('Drop slimes. Two of a kind merge and evolve.', 480, 232);
     ctx.fillText('Three of a kind touching are HARVESTED for big points.', 480, 258);
-    ctx.fillText(`Reach ${TARGET_SCORE} points — but never bury the danger line.`, 480, 284);
+    ctx.fillText(`Reach ${TARGET_SCORE} points and ${WIN_HARVESTS} Bloom-or-bigger harvests.`, 480, 284);
     const row = [0, 1, 2, 3, 4];
     row.forEach((stage, i) => {
       drawSlimeShape(ctx, stage, 330 + i * 76, 356, STAGES[stage].radius, time, { phase: i });

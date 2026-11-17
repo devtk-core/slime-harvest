@@ -51,7 +51,7 @@ export function setupShot(g, name) {
       const ember = spawnSlime(world, 4, x, cy);
       ember.age = 2;
     }
-    world.score = 1200;
+    world.score = 600;
     world.harvests = 3;
     world.merges = 14;
     settle(world, 0.12);

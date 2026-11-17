@@ -1,9 +1,9 @@
 // Slime Harvest — entry point. Owns the run's state machine
 // (title -> play -> win/over), the dropper, sound triggers and the loop.
 
-import { BOX, DROP_COOLDOWN, DROP_TABLE, TARGET_SCORE, VIEW } from './config.js';
+import { BOX, DROP_COOLDOWN, DROP_TABLE, DROP_TABLE_LATE, DROP_TABLE_MID, ESCALATE_LATE, ESCALATE_MID, TARGET_SCORE, VIEW, WIN_HARVESTS } from './config.js';
 import { makeRandom, pickDropStage } from './random.js';
-import { createWorld, dropSlime, stepWorld } from './world.js';
+import { createWorld, dropSlime, floatText, stepWorld } from './world.js';
 import { BUTTONS, drawScene } from './render.js';
 import { attachInput } from './input.js';
 import {
@@ -33,8 +33,17 @@ const g = {
   best: 0,
   paused: false,
   won: false,
+  goalPinged: false,
+  escPinged: 0,
   shotMode: Boolean(shotName),
 };
+
+// The sky escalates with the score: bigger drops, faster fill, real stakes.
+function dropTableFor(score) {
+  if (score >= ESCALATE_LATE) return DROP_TABLE_LATE;
+  if (score >= ESCALATE_MID) return DROP_TABLE_MID;
+  return DROP_TABLE;
+}
 
 try {
   g.best = Number(window.localStorage.getItem('slime-harvest-best') || 0) || 0;
@@ -66,6 +75,8 @@ function startRun() {
   g.nextStage = pickDropStage(random, DROP_TABLE);
   g.cool = 0;
   g.won = false;
+  g.goalPinged = false;
+  g.escPinged = 0;
   g.paused = false;
   g.state = 'play';
   ensureAudio();
@@ -191,12 +202,24 @@ function frame(now) {
     g.cool = Math.max(0, g.cool - dt);
     stepWorld(g.world, dt);
     handleEvents();
-    if (!g.won && g.world.score >= TARGET_SCORE) {
+    if (!g.won && g.world.score >= TARGET_SCORE && g.world.bigHarvests >= WIN_HARVESTS) {
       g.won = true;
       g.state = 'win';
       saveBest();
       playWin();
       announce(`You win with ${g.world.score} points. Continue endlessly or restart.`);
+    }
+    const escLevel = g.world.score >= ESCALATE_LATE ? 2 : g.world.score >= ESCALATE_MID ? 1 : 0;
+    if (escLevel > g.escPinged) {
+      g.escPinged = escLevel;
+      floatText(g.world, (BOX.left + BOX.right) / 2, 300, 'BIGGER DROPS INCOMING!', '#ff9ed2', 23);
+      announce('The drops are getting bigger.');
+    }
+    if (!g.goalPinged && g.world.score >= TARGET_SCORE && g.world.bigHarvests < WIN_HARVESTS) {
+      // Points alone do not finish a run: say what is missing, once.
+      g.goalPinged = true;
+      floatText(g.world, (BOX.left + BOX.right) / 2, 300, `NEED ${WIN_HARVESTS - g.world.bigHarvests} MORE BIG HARVESTS!`, '#ffe066', 24);
+      announce(`Score goal reached. Harvest Bloom or bigger ${WIN_HARVESTS - g.world.bigHarvests} more times to win.`);
     }
   } else if (g.state === 'title' || g.state === 'over') {
     // Let particles and faces keep breathing behind the panels.

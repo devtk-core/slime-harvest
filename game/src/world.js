@@ -5,7 +5,7 @@
 // The harvest rule is the heart of the game: it clears space, so a run can
 // breathe instead of only ever filling up.
 
-import { BOX, DANGER_LIMIT, GRAVITY, MERGE_GRACE, STAGES } from './config.js';
+import { BIG_HARVEST_STAGE, BOX, DANGER_LIMIT, GRAVITY, MERGE_GRACE, STAGES } from './config.js';
 
 let nextId = 1;
 
@@ -19,6 +19,7 @@ export function createWorld() {
     combo: 0,
     comboTimer: 0,
     harvests: 0,
+    bigHarvests: 0,
     merges: 0,
     danger: 0,
     time: 0,
@@ -73,20 +74,25 @@ export function floatText(world, x, y, text, color, size = 22) {
 function stepPhysics(world, h) {
   const slimes = world.slimes;
   for (const s of slimes) {
+    s.touching = false;
     s.vy += GRAVITY * h;
     s.x += s.vx * h;
     s.y += s.vy * h;
+    // Spin fades unless real rolling keeps driving it, so a slime wedged
+    // in the pile settles instead of twirling in its pocket forever.
+    s.angVel *= Math.max(0, 1 - 1.7 * h);
     s.angVel = Math.max(-14, Math.min(14, s.angVel));
     s.angle += s.angVel * h;
     if (s.x - s.r < BOX.left) { s.x = BOX.left + s.r; s.vx = Math.abs(s.vx) * 0.35; }
     if (s.x + s.r > BOX.right) { s.x = BOX.right - s.r; s.vx = -Math.abs(s.vx) * 0.35; }
     if (s.y + s.r > BOX.floor) {
       s.y = BOX.floor - s.r;
+      s.touching = true;
       if (Math.abs(s.vy) > 90) { s.vy = -s.vy * 0.22; s.squash = Math.min(1, Math.abs(s.vy) / 900); }
       else s.vy = 0;
       // Rolling: keep most of the sideways speed and spin to match it, so a
       // slime trundles along the soil instead of stopping dead.
-      s.vx *= 0.995;
+      s.vx *= 0.985;
       const rolling = s.vx / s.r;
       s.angVel += (rolling - s.angVel) * 0.4;
     } else {
@@ -104,6 +110,8 @@ function stepPhysics(world, h) {
       const minDist = a.r + b.r;
       const d2 = dx * dx + dy * dy;
       if (d2 >= minDist * minDist || d2 === 0) continue;
+      a.touching = true;
+      b.touching = true;
       const dist = Math.sqrt(d2);
       const nx = dx / dist;
       const ny = dy / dist;
@@ -124,12 +132,30 @@ function stepPhysics(world, h) {
         a.vy -= impulse * ny * aShare * 2;
         b.vx += impulse * nx * bShare * 2;
         b.vy += impulse * ny * bShare * 2;
-        // A glancing blow sets them spinning. Rolling over a neighbour's
-        // back is where most of the tumbling comes from.
+        // A real glancing blow sets them spinning; resting jitter does not.
         const tangential = rvx * -ny + rvy * nx;
-        a.angVel -= (tangential * 0.06) / Math.max(12, a.r);
-        b.angVel -= (tangential * 0.06) / Math.max(12, b.r);
+        if (Math.abs(tangential) > 40) {
+          a.angVel -= (tangential * 0.015) / Math.max(12, a.r);
+          b.angVel -= (tangential * 0.015) / Math.max(12, b.r);
+        }
       }
+    }
+  }
+  // Contact spends spin: a slime rubbing on a neighbour or the soil stops
+  // twirling quickly, instead of passing its spin around the pile forever.
+  // Rolling survives because the floor keeps re-driving it from vx above.
+  for (const s of slimes) {
+    if (s.touching) s.angVel *= Math.max(0, 1 - 5 * h);
+  }
+  // Final constraint pass: pair separation above can shove the bottom of
+  // a stack through the floor (or a slime out of a wall) after the first
+  // clamp already ran. Re-clamp positions so nothing ever renders sunk.
+  for (const s of slimes) {
+    if (s.x - s.r < BOX.left) s.x = BOX.left + s.r;
+    if (s.x + s.r > BOX.right) s.x = BOX.right - s.r;
+    if (s.y + s.r > BOX.floor) {
+      s.y = BOX.floor - s.r;
+      if (s.vy > 0) s.vy = 0;
     }
   }
 }
@@ -186,6 +212,7 @@ function resolveRules(world) {
       const points = Math.round(STAGES[stage].harvest * cluster.length * world.combo);
       world.score += points;
       world.harvests += 1;
+      if (stage >= BIG_HARVEST_STAGE) world.bigHarvests += 1;
       const cx = cluster.reduce((sum, s) => sum + s.x, 0) / cluster.length;
       const cy = cluster.reduce((sum, s) => sum + s.y, 0) / cluster.length;
       for (const s of cluster) {
@@ -193,7 +220,8 @@ function resolveRules(world) {
         used.add(s.id);
         burst(world, s.x, s.y, STAGES[stage].body, 7, 150);
       }
-      floatText(world, cx, cy - 10, `HARVEST! +${points}`, '#ffe066', 26);
+      const label = stage === STAGES.length - 1 ? 'ROYAL HARVEST!' : 'HARVEST!';
+      floatText(world, cx, cy - 10, `${label} +${points}`, '#ffe066', 26);
       if (world.combo > 1) floatText(world, cx, cy + 20, `COMBO x${world.combo}`, '#ff9ed2', 19);
       world.events.push({ type: stage === STAGES.length - 1 ? 'royal' : 'harvest', x: cx, y: cy });
     }
@@ -202,21 +230,19 @@ function resolveRules(world) {
   // Then pairs: two of a kind merge and evolve (two Kings crown out instead).
   for (const [a, b] of pairs) {
     if (a.dead || b.dead || used.has(a.id) || used.has(b.id)) continue;
+    if (a.stage >= STAGES.length - 1) {
+      // Kings are terminal: a pair of Kings does not vanish. They sit
+      // there, huge and in the way, until a third King completes the
+      // triple and the cluster harvest above reaps all three. Making a
+      // King is a commitment — that clog is the game's endgame pressure.
+      continue;
+    }
     used.add(a.id);
     used.add(b.id);
     a.dead = true;
     b.dead = true;
     const mx = (a.x * a.r + b.x * b.r) / (a.r + b.r);
     const my = (a.y * a.r + b.y * b.r) / (a.r + b.r);
-    if (a.stage >= STAGES.length - 1) {
-      const points = STAGES[a.stage].harvest * 2;
-      world.score += points;
-      burst(world, mx, my, '#ffd700', 34, 260);
-      floatText(world, mx, my - 16, `ROYAL HARVEST! +${points}`, '#ffd700', 27);
-      world.harvests += 1;
-      world.events.push({ type: 'royal', x: mx, y: my });
-      continue;
-    }
     const born = spawnSlime(world, a.stage + 1, mx, my, (a.vx + b.vx) / 2, Math.min(a.vy, b.vy, -60));
     born.age = MERGE_GRACE * 0.6;
     born.squash = 0.7;
@@ -255,13 +281,13 @@ export function stepWorld(world, dt) {
   let overLine = false;
   for (const s of world.slimes) {
     const speed = Math.hypot(s.vx, s.vy);
-    if (s.age > 1 && speed < 60 && s.y - s.r < BOX.dangerY) { overLine = true; break; }
+    if (s.age > 1 && speed < 160 && s.y - s.r < BOX.dangerY) { overLine = true; break; }
   }
   if (overLine) {
     world.danger += dt;
     if (world.danger >= DANGER_LIMIT) world.events.push({ type: 'over' });
   } else {
-    world.danger = Math.max(0, world.danger - dt * 1.6);
+    world.danger = Math.max(0, world.danger - dt * 1.2);
   }
 
   for (const p of world.particles) {

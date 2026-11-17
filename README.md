@@ -7,8 +7,9 @@ Drop slimes into the farm box. **Two of a kind** touching merge and evolve
 into the next stage — Droplet, Sprout, Bloom, Bolt, Ember, Frost, Star, and
 finally the King. **Three of a kind** touching are *harvested* instead: they
 vanish in a burst of points and free up precious space. Chain harvests for
-combos, reach **3,000 points** to win, and never let a settled slime sit
-above the danger line for long.
+combos, reach **3,000 points and 4 harvests of Bloom or bigger** to win — merging alone is
+never enough — and never let a settled slime sit above the danger line
+for long.
 
 The twist on the usual merge formula is the harvest rule: a normal merge game
 only ever fills up, but here a well-placed third slime clears the board —
