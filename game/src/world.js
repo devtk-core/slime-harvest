@@ -124,11 +124,11 @@ function stepPhysics(world, h) {
         a.vy -= impulse * ny * aShare * 2;
         b.vx += impulse * nx * bShare * 2;
         b.vy += impulse * ny * bShare * 2;
-        // A glancing blow sets them spinning a little. (Applied every
-        // substep while in contact, so this must stay tiny.)
+        // A glancing blow sets them spinning. Rolling over a neighbour's
+        // back is where most of the tumbling comes from.
         const tangential = rvx * -ny + rvy * nx;
-        a.angVel -= (tangential * 0.02) / Math.max(12, a.r);
-        b.angVel -= (tangential * 0.02) / Math.max(12, b.r);
+        a.angVel -= (tangential * 0.06) / Math.max(12, a.r);
+        b.angVel -= (tangential * 0.06) / Math.max(12, b.r);
       }
     }
   }
@@ -241,13 +241,8 @@ export function stepWorld(world, dt) {
     s.squash = Math.max(0, s.squash - dt * 5);
     s.vx *= 0.999;
     if (s.angle === undefined) { s.angle = 0; s.angVel = 0; }
-    // Once a slime settles, it rights itself: faces end up readable again.
-    const speed = Math.hypot(s.vx, s.vy);
-    if (speed < 30 && Math.abs(s.angVel) < 0.8) {
-      const upright = Math.round(s.angle / (Math.PI * 2)) * Math.PI * 2;
-      s.angle += (upright - s.angle) * Math.min(1, dt * 7);
-      s.angVel *= 0.75;
-    }
+    // No self-righting: a slime keeps the tilt it stops with, face and all.
+    // Settled piles read as a crowd of faces pointing every which way.
   }
   resolveRules(world);
 
